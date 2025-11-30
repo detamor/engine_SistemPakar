@@ -71,9 +71,38 @@ class LaravelAPIClient:
             response = self.session.get(url, params=params)
             response.raise_for_status()
             
+            json_data = response.json()
+            
+            # Laravel API mengembalikan format: {'success': true, 'data': [...]}
+            # Jika sudah dalam format ini, return langsung
+            if isinstance(json_data, dict) and 'success' in json_data and 'data' in json_data:
+                return json_data
+            
+            # Jika response langsung adalah list, wrap dalam format standar
+            if isinstance(json_data, list):
+                return {
+                    "success": True,
+                    "data": json_data
+                }
+            
+            # Jika response adalah dict tanpa 'success', anggap 'data' ada di root atau wrap
+            if isinstance(json_data, dict):
+                if 'data' in json_data:
+                    return {
+                        "success": True,
+                        "data": json_data['data']
+                    }
+                else:
+                    # Jika dict tanpa 'data', anggap sebagai single item dan wrap dalam list
+                    return {
+                        "success": True,
+                        "data": [json_data]
+                    }
+            
+            # Fallback: empty list
             return {
                 "success": True,
-                "data": response.json()
+                "data": []
             }
             
         except requests.exceptions.RequestException as e:

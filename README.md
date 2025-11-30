@@ -6,9 +6,24 @@ Engine untuk menangani logika bisnis sistem pakar, perhitungan Certainty Factor,
 
 - **Python 3.12**
 - **FastAPI** - Web framework untuk API
-- **Experta** - Rule-based expert system
-- **NumPy** - Perhitungan Certainty Factor
+- **Experta** - Rule-based expert system library untuk inference engine
+- **NumPy** - Perhitungan Certainty Factor (opsional, untuk operasi numerik)
 - **Uvicorn** - ASGI server
+
+### Menggunakan Experta Library
+
+Sistem ini menggunakan **Experta** library untuk implementasi expert system dengan rule-based reasoning. Experta menyediakan:
+
+- **KnowledgeEngine**: Mesin inference untuk menjalankan rules
+- **Facts**: Fakta yang dideklarasikan ke dalam knowledge base
+- **Rules**: Aturan IF-THEN untuk reasoning
+- **Certainty Factor**: Dukungan built-in untuk perhitungan CF
+
+Implementasi menggunakan:
+- `UserSymptom` Fact: Gejala yang dipilih user dengan CF value
+- `DiseaseRule` Fact: Aturan penyakit dengan gejala dan CF dari pakar
+- Rule untuk menghitung CF: `CF(H,E) = CF(E) * CF(Rule)`
+- Formula combine CF: `CF_combine = CF_old + (CF_new * (1 - CF_old))`
 
 ## Versi Python yang Direkomendasikan
 

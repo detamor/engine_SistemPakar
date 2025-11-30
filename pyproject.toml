@@ -1,0 +1,19 @@
+[tool.pyright]
+venvPath = "."
+venv = "venv"
+pythonVersion = "3.12"
+pythonPlatform = "Windows"
+typeCheckingMode = "basic"
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+
+[tool.basedpyright]
+venvPath = "."
+venv = "venv"
+pythonVersion = "3.12"
+pythonPlatform = "Windows"
+typeCheckingMode = "basic"
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+
+
