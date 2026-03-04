@@ -7,26 +7,53 @@ echo.
 cd /d "%~dp0"
 
 echo [1/3] Checking Python...
-python --version
+
+REM Try different python commands
+where python >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python not found!
-    echo Please install Python 3.11 or 3.12
-    pause
-    exit /b 1
+    where python3 >nul 2>&1
+    if errorlevel 1 (
+        where py >nul 2>&1
+        if errorlevel 1 (
+            echo ERROR: Python not found in PATH!
+            echo Please install Python and add it to PATH
+            pause
+            exit /b 1
+        ) else (
+            set PYTHON_CMD=py
+        )
+    ) else (
+        set PYTHON_CMD=python3
+    )
+) else (
+    set PYTHON_CMD=python
 )
 
+%PYTHON_CMD% --version
+echo Python found OK!
+
 echo.
-echo [2/3] Activating virtual environment...
+echo [2/3] Setting up virtual environment...
 if exist "venv\Scripts\activate.bat" (
+    echo Virtual environment found, activating...
     call venv\Scripts\activate.bat
     echo Virtual environment activated!
 ) else (
-    echo WARNING: Virtual environment not found!
-    echo Creating virtual environment...
-    python -m venv venv
+    echo Creating new virtual environment...
+    %PYTHON_CMD% -m venv venv
+    if errorlevel 1 (
+        echo ERROR: Failed to create virtual environment!
+        pause
+        exit /b 1
+    )
     call venv\Scripts\activate.bat
     echo Installing dependencies...
     pip install -r requirements.txt
+    if errorlevel 1 (
+        echo ERROR: Failed to install dependencies!
+        pause
+        exit /b 1
+    )
 )
 
 echo.

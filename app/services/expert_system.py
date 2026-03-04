@@ -51,6 +51,17 @@ Implementasi menggunakan Experta Library untuk:
 """
 from typing import List, Dict, Any, Optional
 from loguru import logger
+
+# Python 3.10+ compatibility fix for frozendict 1.2 (required by experta)
+# collections.Mapping was moved to collections.abc.Mapping in Python 3.3
+# and removed in Python 3.10+
+import collections
+import collections.abc
+if not hasattr(collections, 'Mapping'):
+    collections.Mapping = collections.abc.Mapping
+    collections.MutableMapping = collections.abc.MutableMapping
+    collections.Sequence = collections.abc.Sequence
+
 from experta import Fact, KnowledgeEngine, Rule, Field, AS, MATCH
 
 
