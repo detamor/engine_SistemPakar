@@ -5,28 +5,35 @@ echo   (Using py launcher)
 echo ========================================
 echo.
 
-echo [1/4] Checking Python (using py launcher)...
+echo [1/4] Checking Python...
+set PYTHON_CMD=py
 py --version >nul 2>&1
 if errorlevel 1 (
-    echo [X] ERROR: Python not found!
-    echo.
-    echo Please install Python 3.11 or 3.12 from:
-    echo https://www.python.org/downloads/
-    echo.
-    echo IMPORTANT: Check "Add Python to PATH" during installation
-    echo.
-    echo After installation, restart this script.
-    pause
-    exit /b 1
+    echo [!] 'py' launcher not found, trying 'python'...
+    python --version >nul 2>&1
+    if errorlevel 1 (
+        echo [X] ERROR: Python not found!
+        echo.
+        echo Please install Python 3.11 or 3.12 from:
+        echo https://www.python.org/downloads/
+        echo.
+        echo IMPORTANT: Check "Add Python to PATH" during installation
+        echo.
+        echo After installation, restart this script.
+        pause
+        exit /b 1
+    ) else (
+        set PYTHON_CMD=python
+    )
 )
 echo [OK] Python found
-py --version
+%PYTHON_CMD% --version
 
 echo.
 echo [2/4] Checking virtual environment...
 if not exist "venv\Scripts\activate.bat" (
     echo [!] Virtual environment not found, creating...
-    py -m venv venv
+    %PYTHON_CMD% -m venv venv
     if errorlevel 1 (
         echo [X] Failed to create virtual environment
         pause

@@ -9,28 +9,31 @@ cd /d "%~dp0"
 echo [1/3] Checking Python...
 
 REM Try different python commands
-where python >nul 2>&1
-if errorlevel 1 (
-    where python3 >nul 2>&1
-    if errorlevel 1 (
-        where py >nul 2>&1
-        if errorlevel 1 (
-            echo ERROR: Python not found in PATH!
-            echo Please install Python and add it to PATH
-            pause
-            exit /b 1
-        ) else (
+set PYTHON_CMD=
+python --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set PYTHON_CMD=python
+) else (
+    python3 --version >nul 2>&1
+    if %errorlevel% equ 0 (
+        set PYTHON_CMD=python3
+    ) else (
+        py --version >nul 2>&1
+        if %errorlevel% equ 0 (
             set PYTHON_CMD=py
         )
-    ) else (
-        set PYTHON_CMD=python3
     )
-) else (
-    set PYTHON_CMD=python
+)
+
+if "%PYTHON_CMD%"=="" (
+    echo ERROR: Python not found!
+    echo Please install Python and add it to PATH
+    pause
+    exit /b 1
 )
 
 %PYTHON_CMD% --version
-echo Python found OK!
+echo Python found: %PYTHON_CMD%
 
 echo.
 echo [2/3] Setting up virtual environment...
