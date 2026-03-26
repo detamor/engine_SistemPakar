@@ -399,23 +399,35 @@ class ExpertSystemService:
                 key=lambda x: x['certainty_value'],
                 reverse=True
             )
-            
-            # 8. Ambil penyakit dengan CF tertinggi
-            top_disease = sorted_diseases[0] if sorted_diseases else None
-            
-            # 9. Buat rekomendasi
-            recommendation = self._generate_recommendation(top_disease, sorted_diseases)
+
+            # 8. Terapkan threshold (>= 50%) untuk hasil akhir yang ditampilkan
+            # Catatan: threshold ini diterapkan per penyakit (multi-hipotesis),
+            # dan tidak mencampur CF antar penyakit.
+            threshold_cf = 0.5
+            passed_threshold = [d for d in sorted_diseases if (d.get('certainty_value') or 0.0) >= threshold_cf]
+
+            # 9. Ambil penyakit dengan CF tertinggi dari yang lolos threshold
+            top_disease = passed_threshold[0] if passed_threshold else None
+
+            # 10. Buat rekomendasi (berdasarkan hasil yang lolos threshold)
+            recommendation = self._generate_recommendation(top_disease, passed_threshold)
             
             logger.info(f"Diagnosis selesai untuk plant_id {plant_id}")
-            logger.info(f"Top disease: {top_disease['disease_name']} dengan CF: {top_disease['certainty_value']}")
-            logger.info(f"Total {len(sorted_diseases)} kemungkinan penyakit ditemukan")
+            if top_disease:
+                logger.info(f"Top disease (>=50%): {top_disease['disease_name']} dengan CF: {top_disease['certainty_value']}")
+            else:
+                logger.info("Tidak ada penyakit yang lolos threshold >= 50%")
+            logger.info(f"Total {len(sorted_diseases)} kemungkinan penyakit ditemukan (sebelum threshold)")
+            logger.info(f"Total {len(passed_threshold)} kemungkinan penyakit lolos threshold (>= 50%)")
             
             return {
                 'disease_id': top_disease['disease_id'] if top_disease else None,
                 'disease_name': top_disease['disease_name'] if top_disease else 'Tidak Diketahui',
                 'certainty_value': top_disease['certainty_value'] if top_disease else 0.0,
                 'recommendation': recommendation,
-                'all_possibilities': sorted_diseases[:5]  # Top 5 kemungkinan
+                # Hanya kirim penyakit yang lolos threshold, sudah terurut dari CF tertinggi
+                # Batasi agar payload tetap ringan
+                'all_possibilities': passed_threshold[:10]
             }
             
         except Exception as e:
