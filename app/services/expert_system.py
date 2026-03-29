@@ -37,6 +37,9 @@ Formula perhitungan CF sesuai dengan dokumen proyek:
    Persentase Keyakinan = CF_penyakit * 100
    Contoh: 0.92332288 * 100 = 92.332288%
 
+   Ambang 50% CF: dipakai sebagai peringatan diagnosis lemah di antarmuka, bukan untuk menyembunyikan hasil.
+   Hipotesis dengan CF tertinggi selalu dikembalikan; daftar peringkat disertakan hingga 10 penyakit.
+
 3. Bobot Nilai CF User (dari dokumen):
    - Tidak Yakin: 0
    - Sedikit Yakin: 0.4
@@ -366,7 +369,10 @@ class ExpertSystemService:
                     'disease_id': None,
                     'disease_name': 'Tidak Diketahui',
                     'certainty_value': 0.0,
-                    'recommendation': 'Tidak dapat menentukan diagnosis. Silakan pilih gejala lain atau konsultasi dengan pakar.',
+                    'recommendation': (
+                        'Tidak ada penyakit dalam basis pengetahuan yang cocok dengan gejala yang Anda pilih. '
+                        'Silakan pilih gejala lain, periksa kembali jenis tanaman, atau konsultasi dengan pakar.'
+                    ),
                     'all_possibilities': []
                 }
             
@@ -400,34 +406,25 @@ class ExpertSystemService:
                 reverse=True
             )
 
-            # 8. Terapkan threshold (>= 50%) untuk hasil akhir yang ditampilkan
-            # Catatan: threshold ini diterapkan per penyakit (multi-hipotesis),
-            # dan tidak mencampur CF antar penyakit.
-            threshold_cf = 0.5
-            passed_threshold = [d for d in sorted_diseases if (d.get('certainty_value') or 0.0) >= threshold_cf]
+            # 8. Hipotesis utama = CF tertinggi (tanpa filter ambang; 50% hanya peringatan di UI/rekomendasi)
+            ranked = sorted_diseases[:10]
+            top_disease = ranked[0] if ranked else None
 
-            # 9. Ambil penyakit dengan CF tertinggi dari yang lolos threshold
-            top_disease = passed_threshold[0] if passed_threshold else None
+            recommendation = self._generate_recommendation(top_disease, ranked)
 
-            # 10. Buat rekomendasi (berdasarkan hasil yang lolos threshold)
-            recommendation = self._generate_recommendation(top_disease, passed_threshold)
-            
             logger.info(f"Diagnosis selesai untuk plant_id {plant_id}")
             if top_disease:
-                logger.info(f"Top disease (>=50%): {top_disease['disease_name']} dengan CF: {top_disease['certainty_value']}")
-            else:
-                logger.info("Tidak ada penyakit yang lolos threshold >= 50%")
-            logger.info(f"Total {len(sorted_diseases)} kemungkinan penyakit ditemukan (sebelum threshold)")
-            logger.info(f"Total {len(passed_threshold)} kemungkinan penyakit lolos threshold (>= 50%)")
-            
+                logger.info(
+                    f"Hipotesis utama: {top_disease['disease_name']} dengan CF: {top_disease['certainty_value']}"
+                )
+            logger.info(f"Total {len(sorted_diseases)} hipotesis penyakit dihitung, mengirim {len(ranked)} peringkat teratas")
+
             return {
                 'disease_id': top_disease['disease_id'] if top_disease else None,
                 'disease_name': top_disease['disease_name'] if top_disease else 'Tidak Diketahui',
                 'certainty_value': top_disease['certainty_value'] if top_disease else 0.0,
                 'recommendation': recommendation,
-                # Hanya kirim penyakit yang lolos threshold, sudah terurut dari CF tertinggi
-                # Batasi agar payload tetap ringan
-                'all_possibilities': passed_threshold[:10]
+                'all_possibilities': ranked,
             }
             
         except Exception as e:
@@ -451,34 +448,69 @@ class ExpertSystemService:
             String rekomendasi
         """
         if not top_disease:
-            return "Tidak dapat menentukan diagnosis. Silakan konsultasi dengan pakar."
-        
+            return (
+                "Tidak ada hipotesis penyakit yang dihitung dari gejala yang dipilih. "
+                "Silakan pilih gejala lain atau konsultasikan dengan pakar."
+            )
+
         cf_value = top_disease['certainty_value']
-        
-        recommendation = f"Berdasarkan gejala yang Anda input, kemungkinan besar tanaman Anda terkena **{top_disease['disease_name']}** dengan tingkat kepastian {cf_value * 100:.2f}%.\n\n"
-        
+        eps = 1e-4
+        tied = [
+            d for d in all_diseases
+            if abs((d.get('certainty_value') or 0.0) - cf_value) <= eps
+        ]
+        others = [
+            d for d in all_diseases
+            if abs((d.get('certainty_value') or 0.0) - cf_value) > eps
+        ]
+
+        if len(tied) > 1:
+            names = ', '.join(d['disease_name'] for d in tied)
+            pct = cf_value * 100
+            recommendation = (
+                f"**Lebih dari satu hipotesis tertinggi dengan CF yang sama.** Dari gejala yang Anda pilih, sistem menemukan "
+                f"**lebih dari satu kemungkinan penyakit** yang **sama-sama paling kuat** indikasinya, yaitu **{names}**. "
+                f"Nilai CF tertinggi untuk semua kemungkinan ini **sama**, sekitar **{pct:.2f}%**.\n\n"
+                "**Petunjuk:** Untuk tiap nama di atas, penjelasan penyakit, saran penanganan, dan pencegahan sudah ditulis "
+                "lengkap di **kartu Hipotesis utama** tepat **di atas** kotak rekomendasi ini. Semuanya ada di halaman yang "
+                "sama, tidak perlu membuka menu lain.\n\n"
+            )
+        else:
+            recommendation = (
+                f"Berdasarkan gejala yang Anda input, hipotesis terkuat menunjuk **{top_disease['disease_name']}** "
+                f"dengan nilai keyakinan (CF) {cf_value * 100:.2f}%.\n\n"
+            )
+
+        if cf_value < 0.5:
+            recommendation += (
+                "**Peringatan (di bawah 50%):** Nilai CF masuk kategori diagnosis lemah. "
+                "Hasil tetap ditampilkan sebagai acuan, namun sangat disarankan verifikasi dengan gejala tambahan "
+                "atau konsultasi pakar sebelum penanganan definitif.\n\n"
+            )
+
         if cf_value >= 0.7:
             recommendation += "**Tingkat Kepastian: TINGGI**\n"
             recommendation += "Diagnosis ini memiliki tingkat kepastian yang tinggi. Disarankan untuk segera melakukan penanganan.\n\n"
-        elif cf_value >= 0.4:
+        elif cf_value >= 0.5:
             recommendation += "**Tingkat Kepastian: SEDANG**\n"
-            recommendation += "Diagnosis ini memiliki tingkat kepastian sedang. Disarankan untuk melakukan observasi lebih lanjut atau konsultasi dengan pakar.\n\n"
+            recommendation += "Diagnosis ini memiliki tingkat kepastian sedang. Disarankan observasi lanjutan atau konsultasi dengan pakar bila gejala berlanjut.\n\n"
+        elif cf_value >= 0.4:
+            recommendation += "**Tingkat Kepastian: Cukup Rendah**\n"
+            recommendation += "Keyakinan belum tinggi; gunakan hasil sebagai petunjuk awal dan pertimbangkan konsultasi.\n\n"
         else:
             recommendation += "**Tingkat Kepastian: RENDAH**\n"
-            recommendation += "Diagnosis ini memiliki tingkat kepastian rendah. Sangat disarankan untuk konsultasi langsung dengan pakar.\n\n"
+            recommendation += "Keyakinan matematis rendah; sangat disarankan konsultasi langsung dengan pakar.\n\n"
         
-        # Tambahkan solusi jika ada
-        if top_disease.get('solution'):
-            recommendation += f"**Solusi Penanganan:**\n{top_disease['solution']}\n\n"
-        
-        # Tambahkan pencegahan jika ada
-        if top_disease.get('prevention'):
-            recommendation += f"**Pencegahan:**\n{top_disease['prevention']}\n\n"
-        
-        # Jika ada kemungkinan lain
-        if len(all_diseases) > 1:
-            recommendation += f"\n**Kemungkinan Lain:**\n"
-            for i, disease in enumerate(all_diseases[1:4], 1):  # Tampilkan 3 kemungkinan lain
-                recommendation += f"{i}. {disease['disease_name']} (CF: {disease['certainty_value'] * 100:.2f}%)\n"
+        # Solusi / pencegahan teks: jika lebih dari satu hipotesis tertinggi dengan CF yang sama, ringkas agar tidak duplikat dengan kartu di UI
+        if len(tied) == 1:
+            if top_disease.get('solution'):
+                recommendation += f"**Solusi Penanganan:**\n{top_disease['solution']}\n\n"
+            if top_disease.get('prevention'):
+                recommendation += f"**Pencegahan:**\n{top_disease['prevention']}\n\n"
+
+        if len(others) > 0:
+            recommendation += "\n**Kemungkinan lain (keyakinan lebih rendah):**\n"
+            for i, disease in enumerate(others[:5], 1):
+                recommendation += f"{i}. {disease['disease_name']} ({disease['certainty_value'] * 100:.2f}%)\n"
         
         return recommendation
