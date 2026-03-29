@@ -139,6 +139,9 @@ class ExpertSystemEngine(KnowledgeEngine):
         # Dimana: CF(E) = user_cf (CF dari user), CF(Rule) = rule_cf (CF dari pakar)
         # Contoh: CFGejala = 0.6 * 0.6 = 0.36
         symptom_cf = user_cf * rule_cf
+
+        if symptom_cf <= 0.0:
+            return
         
         # Logging detail untuk debugging
         logger.debug(
@@ -302,6 +305,9 @@ class ExpertSystemService:
                     
                     # Validasi CF value dari pakar (0.0 - 1.0)
                     rule_cf = max(0.0, min(1.0, rule_cf))
+
+                    if rule_cf <= 0.0:
+                        continue
                     
                     # Declare DiseaseRule fact
                     engine.declare(
@@ -334,6 +340,9 @@ class ExpertSystemService:
                 
                 # Validasi CF value (0.0 - 1.0)
                 user_cf = max(0.0, min(1.0, user_cf))
+
+                if user_cf <= 0.0:
+                    continue
                 
                 # Handle gejala duplikat: simpan yang dengan CF tertinggi
                 if symptom_id in unique_symptoms:
@@ -407,7 +416,10 @@ class ExpertSystemService:
             )
 
             # 8. Hipotesis utama = CF tertinggi (tanpa filter ambang; 50% hanya peringatan di UI/rekomendasi)
-            ranked = sorted_diseases[:10]
+            ranked = [
+                d for d in sorted_diseases
+                if (d.get('matched_count') or 0) > 0 and (d.get('certainty_value') or 0.0) > 0.0
+            ][:10]
             top_disease = ranked[0] if ranked else None
 
             recommendation = self._generate_recommendation(top_disease, ranked)
@@ -510,7 +522,8 @@ class ExpertSystemService:
 
         if len(others) > 0:
             recommendation += "\n**Kemungkinan lain (keyakinan lebih rendah):**\n"
-            for i, disease in enumerate(others[:5], 1):
+            visible_others = [d for d in others if (d.get('certainty_value') or 0.0) > 0.0]
+            for i, disease in enumerate(visible_others[:5], 1):
                 recommendation += f"{i}. {disease['disease_name']} ({disease['certainty_value'] * 100:.2f}%)\n"
         
         return recommendation
